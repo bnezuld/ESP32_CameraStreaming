@@ -8,5 +8,8 @@
     "editor.quickSuggestions": true
   },
   "C_Cpp.intelliSenseEngineFallback": "Enabled",
-  "idf.portWin": "COM3"
+  "idf.portWin": "COM3",
+  "files.associations": {
+    "*.inc": "c"
+  }
 }
