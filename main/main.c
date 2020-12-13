@@ -345,7 +345,54 @@ static void CameraCapture_task(void * parm)
   }
 }
 
+esp_err_t SaveNvs(uint32_t val,const char * lookupKey)
+{
+    nvs_handle_t my_handle;
+    esp_err_t err;
+
+    // Open
+    err = nvs_open(STORAGE_NAMESPACE, NVS_READWRITE, &my_handle);
+    if (err != ESP_OK) return err;
+
+    err = nvs_set_u32(my_handle, lookupKey, val);
+    if (err != ESP_OK) return err;
+
+    // Commit
+    err = nvs_commit(my_handle);
+    if (err != ESP_OK) return err;
+
+    // Close
+    nvs_close(my_handle);
+    return ESP_OK;
+}
+
+esp_err_t LoadNvs(uint32_t *val, const char * lookupKey)
+{
+    nvs_handle_t my_handle;
+    esp_err_t err;
+
+    // Open
+    err = nvs_open(STORAGE_NAMESPACE, NVS_READWRITE, &my_handle);
+    if (err != ESP_OK) return err;
+
+    err = nvs_get_u32(my_handle, lookupKey, val);
+    if (err != ESP_OK) return err;
+
+    // Commit
+    err = nvs_commit(my_handle);
+    if (err != ESP_OK) return err;
+
+    // Close
+    nvs_close(my_handle);
+    return ESP_OK;
+}
+
 static void SaveCamera_task(void * parm){
+  uint32_t pictureNumber = 0;
+  LoadNvs(&pictureNumber, "pic_number");
+  pictureNumber += 1;
+
+  char fileName[30] = {'\0'};
 
   sdmmc_host_t host = SDMMC_HOST_DEFAULT();
 
@@ -399,17 +446,19 @@ static void SaveCamera_task(void * parm){
     if(xSemaphoreTake(cameraSaveBSemaphore, portMAX_DELAY)){
       if(xSemaphoreTake(cameraMutex, portMAX_DELAY))
       {
+        sprintf(fileName ,"/sdcard/hello%u.jpg",pictureNumber);
         struct stat st;
-        if (stat("/sdcard/hello.jpeg", &st) == 0) {
+        if (stat(fileName, &st) == 0) {
             // Delete it if it exists
-            unlink("/sdcard/hello.jpeg");
+            unlink(fileName);
         }
 
-        ESP_LOGI(TAG, "Opening file");
-        FILE* f = fopen("/sdcard/hello.jpeg", "w");
+        ESP_LOGI(TAG, "Opening file%s", fileName);
+        FILE* f = fopen(fileName, "w");
         if (f == NULL) {
-            ESP_LOGE(TAG, "Failed to open file for writing");
-            return;
+            ESP_LOGE(TAG, "Failed to open file for writing%s", fileName);
+            xSemaphoreGive(cameraMutex);
+            continue;
         }
         fwrite(_jpg_buf, _jpg_buf_len, sizeof(uint8_t), f);
         fclose(f);
@@ -458,6 +507,8 @@ static void SaveCamera_task(void * parm){
         }
         ESP_LOGI(TAG, "Read from file: '%s'", line);*/
         xSemaphoreGive(cameraMutex);
+        pictureNumber += 1;
+        SaveNvs(pictureNumber, "pic_number");
       }
     }
   }
